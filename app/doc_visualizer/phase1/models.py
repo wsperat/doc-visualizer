@@ -66,11 +66,31 @@ class DocumentSections:
 
 
 @dataclass(frozen=True, slots=True)
+class RawSection:
+    """A raw document section, including non-standard section titles."""
+
+    title: str
+    text: str
+    level: int
+    position: int
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable representation."""
+        return {
+            "title": self.title,
+            "text": self.text,
+            "level": self.level,
+            "position": self.position,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ParsedDocument:
     """Result object for Phase 1 parsing."""
 
     sections: DocumentSections
     metadata: PaperMetadata
+    raw_sections: tuple[RawSection, ...] = ()
 
     def content_payload(self) -> dict[SectionName, str]:
         """Embeddings payload without metadata or references."""
@@ -79,3 +99,7 @@ class ParsedDocument:
     def metadata_payload(self) -> dict[str, object]:
         """Dashboard payload including references and bibliographic fields."""
         return self.metadata.to_dict()
+
+    def raw_content_payload(self) -> list[dict[str, object]]:
+        """Raw section payload preserving all detected section headings."""
+        return [raw_section.to_dict() for raw_section in self.raw_sections]

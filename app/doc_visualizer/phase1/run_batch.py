@@ -6,9 +6,11 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from doc_visualizer.phase1.grobid_gateway import GrobidClientGateway
 from doc_visualizer.phase1.metadata import MetadataJsonWriter
+from doc_visualizer.phase1.models import ParsedDocument
 from doc_visualizer.phase1.pipeline import PhaseOnePipeline
 from doc_visualizer.phase1.tei_parser import BeautifulSoupTeiParser
 
@@ -22,13 +24,21 @@ class ProcessingResult:
     message: str
 
 
+class ProcessingPipeline(Protocol):
+    """Minimal pipeline contract for batch processing."""
+
+    def process_pdf(self, pdf_path: Path) -> ParsedDocument:
+        """Process one PDF file into a parsed document."""
+
+
 def main() -> int:
     """Run Phase 1 processing for all PDFs in the input directory."""
     args = _build_arg_parser().parse_args()
     input_dir = args.input_dir.resolve()
     output_dir = args.output_dir.resolve()
     metadata_dir = output_dir / "metadata"
-    content_dir = output_dir / "content"
+    grobid_content_dir = output_dir / "grobid_content"
+    raw_content_dir = output_dir / "raw_content"
 
     pdf_files = sorted(input_dir.glob("*.pdf"))
     if not pdf_files:
@@ -49,7 +59,8 @@ def main() -> int:
                 pipeline=pipeline,
                 metadata_writer=metadata_writer,
                 metadata_dir=metadata_dir,
-                content_dir=content_dir,
+                grobid_content_dir=grobid_content_dir,
+                raw_content_dir=raw_content_dir,
             )
         )
 
@@ -75,7 +86,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         default=Path("data/phase1_output"),
-        help="Directory where content and metadata JSON outputs are written.",
+        help="Directory where grobid_content/raw_content/metadata JSON outputs are written.",
     )
     parser.add_argument(
         "--config-path",
@@ -88,10 +99,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 def _process_one_pdf(
     pdf_path: Path,
-    pipeline: PhaseOnePipeline,
+    pipeline: ProcessingPipeline,
     metadata_writer: MetadataJsonWriter,
     metadata_dir: Path,
-    content_dir: Path,
+    grobid_content_dir: Path,
+    raw_content_dir: Path,
 ) -> ProcessingResult:
     try:
         parsed = pipeline.process_pdf(pdf_path)
@@ -99,13 +111,22 @@ def _process_one_pdf(
         metadata_path = metadata_dir / f"{pdf_path.stem}.json"
         metadata_writer.write(parsed.metadata, metadata_path)
 
-        content_payload = parsed.content_payload()
-        content_path = content_dir / f"{pdf_path.stem}.json"
-        content_path.parent.mkdir(parents=True, exist_ok=True)
-        content_path.write_text(
-            json.dumps(content_payload, indent=2, sort_keys=True) + "\n",
+        grobid_content_payload = parsed.content_payload()
+        grobid_content_path = grobid_content_dir / f"{pdf_path.stem}.json"
+        grobid_content_path.parent.mkdir(parents=True, exist_ok=True)
+        grobid_content_path.write_text(
+            json.dumps(grobid_content_payload, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+
+        raw_content_payload = parsed.raw_content_payload()
+        raw_content_path = raw_content_dir / f"{pdf_path.stem}.json"
+        raw_content_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_content_path.write_text(
+            json.dumps(raw_content_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
         return ProcessingResult(pdf_path=pdf_path, status="ok", message="processed")
     except Exception as exc:  # pragma: no cover - integration failure path
         return ProcessingResult(pdf_path=pdf_path, status="error", message=str(exc))

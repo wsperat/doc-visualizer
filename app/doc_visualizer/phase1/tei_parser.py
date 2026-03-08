@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from bs4 import BeautifulSoup
 from bs4.element import PageElement, Tag
 
-from doc_visualizer.phase1.models import DocumentSections, PaperMetadata, ParsedDocument
+from doc_visualizer.phase1.models import DocumentSections, PaperMetadata, ParsedDocument, RawSection
 from doc_visualizer.phase1.section_classifier import classify_section_heading
 from doc_visualizer.phase1.text_utils import (
     extract_first_year,
@@ -28,10 +28,12 @@ class BeautifulSoupTeiParser:
 
         sections = _extract_sections(soup)
         metadata = _extract_metadata(soup)
+        raw_sections = _extract_raw_sections(soup)
 
         return ParsedDocument(
             sections=DocumentSections.from_mapping(sections),
             metadata=metadata,
+            raw_sections=raw_sections,
         )
 
 
@@ -69,10 +71,10 @@ def _extract_sections(soup: BeautifulSoup) -> dict[SectionName, str]:
     return sections
 
 
-def _extract_div_text(div_tag: Tag, heading_text: str) -> str:
+def _extract_div_text(div_tag: Tag, heading_text: str, recursive: bool = True) -> str:
     """Extract paragraph text from a body <div> while excluding heading text."""
     paragraphs: list[str] = []
-    for paragraph in _iter_tags(div_tag.find_all("p")):
+    for paragraph in _iter_tags(div_tag.find_all("p", recursive=recursive)):
         paragraph_text = _tag_text(paragraph)
         if paragraph_text:
             paragraphs.append(paragraph_text)
@@ -92,6 +94,65 @@ def _extract_div_text(div_tag: Tag, heading_text: str) -> str:
             return normalize_whitespace(div_text[len(heading_text) :])
 
     return div_text
+
+
+def _extract_raw_sections(soup: BeautifulSoup) -> tuple[RawSection, ...]:
+    """Extract all body div sections, including non-standard/subsection headings."""
+    body_tag = soup.select_one("text > body")
+    if not isinstance(body_tag, Tag):
+        return ()
+
+    raw_sections: list[RawSection] = []
+    position = 1
+    for div_tag in _iter_tags(body_tag.find_all("div")):
+        heading_text = _resolve_raw_section_title(div_tag=div_tag, position=position)
+        section_text = _extract_div_text(
+            div_tag=div_tag,
+            heading_text=heading_text,
+            recursive=False,
+        )
+        if not section_text:
+            continue
+
+        raw_sections.append(
+            RawSection(
+                title=heading_text,
+                text=section_text,
+                level=_div_level(div_tag),
+                position=position,
+            )
+        )
+        position += 1
+
+    return tuple(raw_sections)
+
+
+def _resolve_raw_section_title(div_tag: Tag, position: int) -> str:
+    """Resolve a stable title for a raw section node."""
+    explicit_title = _tag_text(div_tag.find("head", recursive=False))
+    if explicit_title:
+        return explicit_title
+
+    type_hint = normalize_whitespace(str(div_tag.get("type", "")))
+    n_hint = normalize_whitespace(str(div_tag.get("n", "")))
+    combined_hint = join_non_empty((type_hint, n_hint))
+    if combined_hint:
+        return combined_hint
+
+    return f"untitled_section_{position}"
+
+
+def _div_level(div_tag: Tag) -> int:
+    """Return div nesting level relative to body (1 = top-level section)."""
+    level = 1
+    parent = div_tag.parent
+    while isinstance(parent, Tag):
+        if parent.name == "div":
+            level += 1
+        if parent.name == "body":
+            break
+        parent = parent.parent
+    return level
 
 
 def _extract_metadata(soup: BeautifulSoup) -> PaperMetadata:
