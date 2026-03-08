@@ -1,64 +1,107 @@
-# Doc-visualizer
-## Phase 1: Data Ingestion & Preprocessing
+# Doc Visualizer
+## Phase 1: Structural Parsing & Metadata Isolation
 
-Before the "smart" stuff happens, you need clean text. PDF structures can be messy (columns, headers, footers).
+Scientific PDFs are not "blocks of text"; they are hierarchies. We must treat them as such.
 
-* **Tools:** `PyMuPDF` (fastest) or `marker` (best for preserving layout/math).
-* **Workflow:** 1.  Extract text from PDF.
-2.  Clean noise (OCR errors, extra whitespace, stop-word removal for LDA).
-3.  **Chunking:** If documents are long, decide if you're modeling at the *page* level or *document* level.
+* **Primary Tool:** **GROBID** (via `grobid-client-python`). It is the industry standard for parsing scientific PDFs into structured XML/TEI.
+* **The Extraction Logic:** * **Content:** Extract `Abstract`, `Introduction`, `Methods`, `Results`, and `Conclusion` into a dictionary.
+* **Metadata:** Extract `Title`, `Authors`, `Year`, and **References**.
+* **Reference Handling:** References are stripped from the text body to prevent "citation noise" in the embeddings but stored in a metadata JSON for the dashboard's "Paper Info" view.
+
+
 
 ---
 
-## Phase 2: Dual-Track Topic Modeling
+## Phase 2: User-Selectable Context Strategies
 
-To meet the "different strategies" requirement, I recommend implementing both a probabilistic model and a transformer-based model.
+Your system will allow users to choose how the model "perceives" the document structure.
 
-| Strategy | Technology | Best For... |
+| Strategy | Implementation Logic | Best For... |
 | --- | --- | --- |
-| **Probabilistic (LDA)** | `Gensim` | Interpretable keywords, fast, works on smaller datasets. |
-| **Neural (BERTopic)** | `BERTopic` | Capturing semantic nuances and context using embeddings. |
-| **Matrix Factorization (NMF)** | `Scikit-learn` | Short documents or very distinct categories. |
+| **Whole Doc (Mean Pool)** | Embed all sections; take the mathematical average of all vectors. | High-level categorization. |
+| **Parent-Child Prepend** | Split sections into 512-token chunks. **Prepend** the Title and Abstract to *every* chunk before embedding. | Preserving "Why" the research matters in technical sections. |
+| **Weighted Pooling** | User assigns weights ($w$) to sections. $V_{doc} = \frac{\sum (w_i \cdot V_i)}{\sum w_i}$. | Prioritizing the "Results" and "Abstract" over "Introduction." |
 
 ---
 
-## Phase 3: Summarization & Quality Control
+## Phase 3: Multi-Track Topic Modeling
 
-This is where it gets interesting. You aren't just summarizing; you're *auditing* the summary.
+To compare strategies, the pipeline will run two (or three) parallel engines:
 
-* **Summarization:** Use `HuggingFace` transformers (e.g., `BART` or `T5`) or an LLM API (OpenAI/Claude).
-* **QC Logic:** Generate embeddings for both the original text ($V_{orig}$) and the summary ($V_{sum}$).
-* **Metric:** Use **Cosine Similarity** to check if the summary stayed "on topic."
+1. **LDA (Latent Dirichlet Allocation):**
+* **Mechanism:** Probabilistic/Bag-of-Words.
+* **Preprocessing:** Requires heavy cleaning (stop-words, lemmatization).
+* **Output:** Word-cloud style topics (e.g., "protein, cell, signaling").
 
-$$\text{Similarity} = \frac{V_{orig} \cdot V_{sum}}{\|V_{orig}\| \|V_{sum}\|}$$
 
-> **Pro-tip:** If the similarity score drops below a certain threshold (e.g., 0.80), your dashboard should flag that summary as "low fidelity."
+2. **BERTopic (Neural):**
+* **Mechanism:** SBERT Embeddings + UMAP + HDBSCAN + c-TF-IDF.
+* **Benefit:** Captures context and polysemy (words with multiple meanings).
 
----
 
-## Phase 4: Dimensionality Reduction & Viz
+3. **Top2Vec (Optional):**
+* **Mechanism:** Jointly learns word and document vectors. Good for very dense, high-signal corpora.
 
-To plot documents in 2D, you need to squash high-dimensional embeddings.
 
-1. **UMAP (Uniform Manifold Approximation and Projection):** Generally superior to t-SNE for preserving both local and global structure. It’s faster and handles large datasets better.
-2. **PCA (Principal Component Analysis):** Good as a baseline, but often fails to capture the "clusters" in natural language.
-
----
-
-## Phase 5: The Dashboard (Plotly + Streamlit)
-
-While you mentioned Plotly, I highly recommend using **Streamlit** as the framework to host your Plotly charts. It allows you to build a Python UI in minutes.
-
-* **Interactive Map:** A Plotly scatter plot where each point is a document. Hovering reveals the summary and the top topics.
-* **Intertopic Distance Map:** A visualization showing how "close" different topics are to one another.
-* **QC Heatmap:** A chart showing the similarity scores across the corpus to identify where the summarizer struggled.
 
 ---
 
-### Suggested Tech Stack
+## Phase 4: Summarization & Semantic Auditing (QC)
 
-* **Language:** Python 3.10+
-* **NLP:** `BERTopic`, `Spacy`, `Transformers`
-* **Math/Stats:** `Scikit-learn`, `UMAP-learn`
-* **Frontend:** `Streamlit`
-* **Plotting:** `Plotly`
+This is the "closed-loop" part of your project where the AI checks its own homework.
+
+* **Summarization Engine:** Use **LED (Longformer Encoder-Decoder)** or **LongT5**. These models handle up to 16,384 tokens, allowing for full-paper context.
+* **Quality Control Logic:**
+1. Generate Summary ($S$).
+2. Embed $S$ into vector $V_s$.
+3. Compare $V_s$ against the **Document Vector** ($V_{doc}$) generated in Phase 2.
+4. **Metric:** Cosine Similarity score.
+
+
+$$\text{Similarity Score} = \frac{V_{doc} \cdot V_s}{\|V_{doc}\| \|V_s\|}$$
+
+
+
+> **Dashboard Action:** Papers with a similarity score $< 0.80$ should be highlighted in **red** on the dashboard to warn the user of potential "summary drift" or hallucinations.
+
+---
+
+## Phase 5: Dimensionality Reduction & Mapping
+
+Transforming high-dimensional embeddings into a 2D "Knowledge Map."
+
+* **UMAP (Uniform Manifold Approximation and Projection):** * Used to project the $V_{doc}$ vectors.
+* **Hyperparameter Control:** Expose `n_neighbors` (Balance local vs. global structure) and `min_dist` (How tightly dots cluster) to the user.
+
+
+* **Clustering:** Use **HDBSCAN** to automatically identify topic clusters on the 2D plane without needing to pre-define the number of topics ($k$).
+
+---
+
+## Phase 6: The Plotly-Streamlit Dashboard
+
+The "Command Center" for the user.
+
+* **View A: The Galaxy Map (Plotly Scatter):**
+* **X/Y:** UMAP Coordinates.
+* **Color:** Topic Cluster.
+* **Hover:** Title, Abstract, and QC Score.
+* **Click:** Opens a sidebar with the **Full Summary** and the list of **References** (Metadata).
+
+
+* **View B: Strategy Comparison:**
+* Side-by-side bar charts showing how the topic distribution changes between LDA and BERTopic.
+
+
+* **View C: Fidelity Audit:**
+* A ranked list of documents by their Cosine Similarity score.
+
+---
+
+### Tech Stack
+
+* **Parsing:** `grobid-client-python`, `BeautifulSoup` (for XML).
+* **Embeddings:** `sentence-transformers` (Model: `all-mpnet-base-v2`).
+* **Topic Modeling:** `bertopic`, `gensim`, `scikit-learn`.
+* **Reduction:** `umap-learn`, `hdbscan`.
+* **UI/Viz:** `streamlit`, `plotly`.
