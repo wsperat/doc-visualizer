@@ -1,6 +1,26 @@
 # doc-visualizer
 Apply different strategies for document visualization in an interactive way.
 
+## Async API Service
+All phases are available through an async FastAPI service. Each request creates a background job
+and immediately returns a `job_id`; status/results are polled via `/jobs/{job_id}`.
+
+Run API server:
+```bash
+UV_CACHE_DIR=.uv-cache uv run uvicorn doc_visualizer.api.main:app --host 0.0.0.0 --port 8000
+```
+
+Core endpoints:
+- `GET /health`
+- `GET /jobs`
+- `GET /jobs/{job_id}`
+- `POST /phases/1/run`
+- `POST /phases/2/run`
+- `POST /phases/3/run`
+- `POST /phases/4/run`
+- `POST /phases/5/run`
+- `POST /phases/5/plot`
+
 ## Implemented Phases
 
 ### Phase 1: Structural Parsing and Metadata Isolation

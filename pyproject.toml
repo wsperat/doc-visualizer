@@ -10,15 +10,18 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "beautifulsoup4>=4.12.3",
+  "fastapi>=0.118.0",
   "grobid-client-python>=0.0.8",
   "hdbscan>=0.8.39",
   "plotly>=6.0.1",
   "scikit-learn>=1.5.2",
   "umap-learn>=0.5.9.post2",
+  "uvicorn>=0.34.0",
 ]
 
 [project.optional-dependencies]
 dev = [
+  "httpx>=0.28.1",
   "isort>=5.13.2",
   "mypy>=1.11.2",
   "pytest>=8.3.3",

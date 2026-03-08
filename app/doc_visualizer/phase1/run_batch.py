@@ -36,28 +36,52 @@ def main() -> int:
     args = _build_arg_parser().parse_args()
     input_dir = args.input_dir.resolve()
     output_dir = args.output_dir.resolve()
+    try:
+        results = run_phase1_batch(
+            input_dir=input_dir,
+            output_dir=output_dir,
+            config_path=args.config_path,
+        )
+    except FileNotFoundError:
+        print(f"No PDF files found in {input_dir}")
+        return 1
+
+    succeeded = sum(1 for result in results if result.status == "ok")
+    failed = len(results) - succeeded
+    print(f"Processed {len(results)} files: {succeeded} succeeded, {failed} failed.")
+    return 0 if failed == 0 else 2
+
+
+def run_phase1_batch(
+    *,
+    input_dir: Path,
+    output_dir: Path,
+    config_path: str | None = None,
+    pipeline: ProcessingPipeline | None = None,
+    metadata_writer: MetadataJsonWriter | None = None,
+) -> list[ProcessingResult]:
+    """Process all PDFs in input_dir and write Phase 1 outputs."""
     metadata_dir = output_dir / "metadata"
     grobid_content_dir = output_dir / "grobid_content"
     raw_content_dir = output_dir / "raw_content"
 
     pdf_files = sorted(input_dir.glob("*.pdf"))
     if not pdf_files:
-        print(f"No PDF files found in {input_dir}")
-        return 1
+        raise FileNotFoundError(f"No PDF files found in {input_dir}")
 
-    pipeline = PhaseOnePipeline(
-        xml_source=GrobidClientGateway(config_path=args.config_path),
+    resolved_pipeline = pipeline or PhaseOnePipeline(
+        xml_source=GrobidClientGateway(config_path=config_path),
         tei_parser=BeautifulSoupTeiParser(),
     )
-    metadata_writer = MetadataJsonWriter()
+    resolved_metadata_writer = metadata_writer or MetadataJsonWriter()
 
     results: list[ProcessingResult] = []
     for pdf_path in pdf_files:
         results.append(
             _process_one_pdf(
                 pdf_path=pdf_path,
-                pipeline=pipeline,
-                metadata_writer=metadata_writer,
+                pipeline=resolved_pipeline,
+                metadata_writer=resolved_metadata_writer,
                 metadata_dir=metadata_dir,
                 grobid_content_dir=grobid_content_dir,
                 raw_content_dir=raw_content_dir,
@@ -65,11 +89,7 @@ def main() -> int:
         )
 
     _write_report(results, output_dir / "report.json")
-
-    succeeded = sum(1 for result in results if result.status == "ok")
-    failed = len(results) - succeeded
-    print(f"Processed {len(results)} files: {succeeded} succeeded, {failed} failed.")
-    return 0 if failed == 0 else 2
+    return results
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

@@ -5,6 +5,43 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Protocol, TypedDict, cast
+
+
+class _FigureLike(Protocol):
+    def add_trace(self, trace: object) -> None: ...
+
+    def update_layout(self, **kwargs: object) -> None: ...
+
+
+class _GraphObjectsLike(Protocol):
+    def Figure(self) -> _FigureLike: ...  # noqa: N802
+
+    def Scatter(self, **kwargs: object) -> object: ...  # noqa: N802
+
+
+class _WriteHtmlCallable(Protocol):
+    def __call__(
+        self,
+        figure: _FigureLike,
+        file: str,
+        *,
+        include_plotlyjs: str,
+        full_html: bool,
+    ) -> None: ...
+
+
+class _MapRecord(TypedDict):
+    view: str
+    source: str
+    strategy: str
+    document_id: str
+    title: str
+    x: float
+    y: float
+    cluster_id: int
+    similarity_score: float | None
+    is_below_threshold: bool | None
 
 
 def main() -> int:
@@ -57,8 +94,16 @@ def build_plot_html(
                             record["source"],
                             record["strategy"],
                             record["cluster_id"],
-                            record.get("similarity_score"),
-                            record.get("is_below_threshold"),
+                            (
+                                f"{record['similarity_score']:.3f}"
+                                if record["similarity_score"] is not None
+                                else "n/a"
+                            ),
+                            (
+                                str(record["is_below_threshold"])
+                                if record["is_below_threshold"] is not None
+                                else "n/a"
+                            ),
                         ]
                         for record in cluster_records
                     ],
@@ -68,7 +113,7 @@ def build_plot_html(
                         "Source: %{customdata[2]}<br>"
                         "Strategy: %{customdata[3]}<br>"
                         "Cluster: %{customdata[4]}<br>"
-                        "Similarity: %{customdata[5]:.3f}<br>"
+                        "Similarity: %{customdata[5]}<br>"
                         "Below threshold: %{customdata[6]}<extra></extra>"
                     ),
                 )
@@ -125,8 +170,8 @@ def _load_titles(metadata_dir: Path) -> dict[str, str]:
 def _load_map_records(
     phase5_output_dir: Path,
     titles: dict[str, str],
-) -> list[dict[str, object]]:
-    records: list[dict[str, object]] = []
+) -> list[_MapRecord]:
+    records: list[_MapRecord] = []
     for map_file in sorted(phase5_output_dir.glob("*/*/map.json")):
         source = map_file.parent.parent.name
         strategy = map_file.parent.name
@@ -152,6 +197,12 @@ def _load_map_records(
                 continue
             if not isinstance(cluster_id, int):
                 continue
+            similarity_raw = point.get("similarity_score")
+            is_below_raw = point.get("is_below_threshold")
+            similarity_score = (
+                float(similarity_raw) if isinstance(similarity_raw, int | float) else None
+            )
+            is_below_threshold = is_below_raw if isinstance(is_below_raw, bool) else None
 
             title = titles.get(document_id, document_id)
             records.append(
@@ -164,31 +215,33 @@ def _load_map_records(
                     "x": float(x_value),
                     "y": float(y_value),
                     "cluster_id": cluster_id,
-                    "similarity_score": point.get("similarity_score"),
-                    "is_below_threshold": point.get("is_below_threshold"),
+                    "similarity_score": similarity_score,
+                    "is_below_threshold": is_below_threshold,
                 }
             )
     return records
 
 
-def _load_plotly_graph_objects() -> object:
+def _load_plotly_graph_objects() -> _GraphObjectsLike:
     try:
-        import plotly.graph_objects as graph_objects
+        import plotly.graph_objects as graph_objects  # type: ignore[import-untyped]
     except ModuleNotFoundError as exc:  # pragma: no cover
         raise RuntimeError("plotly is not installed") from exc
-    return graph_objects
+    return cast(_GraphObjectsLike, graph_objects)
 
 
-def _load_plotly_write_html():
+def _load_plotly_write_html() -> _WriteHtmlCallable:
     try:
-        from plotly.io import write_html
+        from plotly.io import write_html  # type: ignore[import-untyped]
     except ModuleNotFoundError as exc:  # pragma: no cover
         raise RuntimeError("plotly is not installed") from exc
-    return write_html
+    return cast(_WriteHtmlCallable, write_html)
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate interactive HTML from Phase 5 map outputs.")
+    parser = argparse.ArgumentParser(
+        description="Generate interactive HTML from Phase 5 map outputs."
+    )
     parser.add_argument(
         "--phase5-output-dir",
         type=Path,
