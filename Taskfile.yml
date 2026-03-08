@@ -1,0 +1,73 @@
+---
+version: '3'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+  venv:
+    desc: Create virtual environment
+    cmds:
+      - uv venv --python=$(cat .python-version) --seed --allow-existing
+
+  install:
+    desc: Install dependencies
+    cmds:
+      - uv sync --all-extras
+
+  lint-check-only:
+    desc: Check linting and formatting (no fixes)
+    cmds:
+      - uv run isort --check-only .
+      - uv run ruff check .
+      - uv run ruff format --check .
+      - uv run yamllint .
+
+  lint:
+    desc: Auto-fix linting and formatting issues
+    cmds:
+      - uv run isort .
+      - uv run ruff check --fix .
+      - uv run ruff format .
+      - uv run yamllint .
+
+  mypy:
+    desc: Run static type checks with mypy
+    deps: [install]
+    cmds:
+      - uv run mypy . --check-untyped-defs --disallow-untyped-defs --strict --config-file pyproject.toml
+
+  setup-local-env:
+    desc: Setup local environment
+    cmds:
+      - task venv
+      - task install
+      - uv run pre-commit install
+
+  clean:
+    desc: Clean cache and temporary files
+    cmds:
+      - rm -rf .mypy_cache .pytest_cache .ruff_cache
+      - find . -regex ".*/__pycache__" -exec rm -rf {} +
+      - uv run pre-commit clean || true
+
+  test:
+    desc: Run tests
+    deps: [install]
+    cmds:
+      - uv run pytest
+
+  lock-check:
+    desc: Verify lock file is up-to-date
+    cmds:
+      - uv lock --locked
+
+  check:
+    desc: run tests and formatting checks
+    deps: [install]
+    cmds:
+      - task lock-check
+      - task lint
+      - task mypy
+      - task test
