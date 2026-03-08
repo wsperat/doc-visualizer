@@ -12,6 +12,7 @@ dependencies = [
   "beautifulsoup4>=4.12.3",
   "grobid-client-python>=0.0.8",
   "hdbscan>=0.8.39",
+  "plotly>=6.0.1",
   "scikit-learn>=1.5.2",
   "umap-learn>=0.5.9.post2",
 ]

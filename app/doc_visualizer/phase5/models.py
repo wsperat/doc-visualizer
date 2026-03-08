@@ -61,6 +61,7 @@ class PhaseFiveRunResult:
     strategy: str
     status: str
     message: str
+    document_count: int | None = None
     output_path: str | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -70,6 +71,8 @@ class PhaseFiveRunResult:
             "status": self.status,
             "message": self.message,
         }
+        if self.document_count is not None:
+            payload["document_count"] = self.document_count
         if self.output_path is not None:
             payload["output_path"] = self.output_path
         return payload

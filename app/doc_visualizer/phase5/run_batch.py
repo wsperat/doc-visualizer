@@ -54,7 +54,12 @@ def main() -> int:
 
     succeeded = sum(1 for result in results if result.status == "ok")
     failed = len(results) - succeeded
-    print(f"Mapped {len(results)} source+strategy corpora: {succeeded} succeeded, {failed} failed.")
+    total_documents = sum(result.document_count or 0 for result in results if result.status == "ok")
+    print(
+        "Mapped "
+        f"{total_documents} documents across {len(results)} source+strategy corpora: "
+        f"{succeeded} succeeded, {failed} failed."
+    )
     return 0 if failed == 0 else 2
 
 
@@ -134,6 +139,7 @@ def _run_one_group(
             strategy=strategy,
             status="ok",
             message=f"mapped {len(documents)} documents",
+            document_count=len(documents),
             output_path=str(output_path),
         )
     except Exception as exc:  # pragma: no cover - integration failure path

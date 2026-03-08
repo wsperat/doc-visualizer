@@ -20,6 +20,7 @@ data/phase2_output/
 data/phase3_output/
 data/phase4_output/
 data/phase5_output/
+data/phase5_output/document_map.html
 
 # Distribution / packaging
 *.ipynb
