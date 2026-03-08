@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doc-visualizer"
+version = "0.1.0"
+description = "Document visualization pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "beautifulsoup4>=4.12.3",
+  "grobid-client-python>=0.0.8",
+]
+
+[project.optional-dependencies]
+dev = [
+  "isort>=5.13.2",
+  "mypy>=1.11.2",
+  "pytest>=8.3.3",
+  "ruff>=0.11.12",
+  "yamllint>=1.35.1",
+]
+
+[tool.setuptools]
+package-dir = { "" = "app" }
+
+[tool.setuptools.packages.find]
+where = ["app"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+pythonpath = ["app"]
+testpaths = ["tests"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+src_paths = ["app", "tests"]
+skip = [".venv", ".uv-cache"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["app", "tests"]
+exclude = [".venv", ".uv-cache"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "ANN", "N", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["ANN401"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "app"
+warn_unused_configs = true
+files = ["app", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["bs4", "bs4.*", "grobid_client", "grobid_client.*"]
+ignore_missing_imports = true
