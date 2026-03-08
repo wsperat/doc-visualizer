@@ -76,7 +76,8 @@ Phase 2 provides strategy-specific context construction and pooling logic for em
 UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase2.run_batch \
   --phase1-output-dir data/phase1_output \
   --phase2-output-dir data/phase2_output \
-  --max-tokens 512
+  --max-tokens 512 \
+  --content-source grobid
 ```
 
 Optional section weights:
@@ -87,6 +88,30 @@ UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase2.run_batch \
   --weights-json data/section_weights.json
 ```
 
+Use richer hierarchical content from Phase 1 raw extraction:
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase2.run_batch \
+  --phase1-output-dir data/phase1_output \
+  --phase2-output-dir data/phase2_output \
+  --content-source raw
+```
+
+Or combine standard + raw sources:
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase2.run_batch \
+  --phase1-output-dir data/phase1_output \
+  --phase2-output-dir data/phase2_output \
+  --content-source hybrid
+```
+
+Run standard and rich raw pipelines in one execution:
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase2.run_batch \
+  --phase1-output-dir data/phase1_output \
+  --phase2-output-dir data/phase2_output \
+  --content-source both
+```
+
 #### Phase 2 output structure
 - `data/phase2_output/whole_doc_mean_pool/*.json`
   - One transformed payload per document.
@@ -94,8 +119,14 @@ UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase2.run_batch \
   - Chunked and prepended inputs (title + abstract + section).
 - `data/phase2_output/weighted_pooling/*.json`
   - Section-level inputs + resolved weights for each document.
+- Raw/hybrid outputs include hierarchy metadata per section (`title`, `breadcrumb`, `level`, `position`)
+  so chapter/section/subsection relationships are preserved.
 - `data/phase2_output/report.json`
   - Per-document transformation status report.
+- In `both` mode, outputs are namespaced by source:
+  - `data/phase2_output/grobid/...`
+  - `data/phase2_output/raw/...`
+  - with a combined top-level `data/phase2_output/report.json`.
 
 #### Minimal usage example
 ```python
@@ -127,7 +158,81 @@ vector = service.build_document_vector(
 )
 ```
 
+### Phase 3: Multi-Track Topic Modeling
+Phase 3 consumes Phase 2 outputs and runs multiple topic engines per source/strategy corpus.
+
+#### Engines
+- `lda` (implemented via scikit-learn LDA with deterministic text cleaning)
+- `bertopic` (lazy-loaded wrapper)
+- `top2vec` (optional lazy-loaded wrapper)
+
+#### Run Phase 3
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase3.run_batch \
+  --phase2-output-dir data/phase2_output \
+  --phase3-output-dir data/phase3_output \
+  --engines lda \
+  --n-topics 8 \
+  --top-n-terms 10
+```
+
+Run multiple tracks (when optional engine deps are installed):
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase3.run_batch \
+  --phase2-output-dir data/phase2_output \
+  --phase3-output-dir data/phase3_output \
+  --engines lda,bertopic
+```
+
+#### Phase 3 output structure
+- `data/phase3_output/<source>/<strategy>/<engine>.json`
+  - Topic clusters, top terms, document-topic assignments, and engine metadata.
+- `data/phase3_output/report.json`
+  - Status report for each source+strategy+engine track.
+
+### Phase 4: Summarization and Semantic Auditing
+Phase 4 summarizes each transformed strategy document and compares summary semantics against
+strategy document vectors using cosine similarity.
+
+#### What it does
+1. Loads all Phase 2 strategy payloads (`inputs`) across all sources (`grobid`, `raw`, `default`, etc.).
+2. Builds one document text per payload (deduplicated chunk join).
+3. Generates a summary (`extractive`, `led`, or `longt5` backend).
+4. Builds the strategy document vector:
+   - `whole_doc_mean_pool`: mean of chunk embeddings.
+   - `parent_child_prepend`: mean of chunk embeddings.
+   - `weighted_pooling`: section mean vectors + weighted pooling from `section_weights`.
+5. Embeds the summary text and computes cosine similarity against the document vector.
+6. Flags drift risk when similarity is below threshold (default `0.80`).
+
+#### Run Phase 4
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase4.run_batch \
+  --phase2-output-dir data/phase2_output \
+  --phase4-output-dir data/phase4_output \
+  --summary-backend extractive \
+  --embedding-backend hashing \
+  --similarity-threshold 0.80
+```
+
+Optional transformer summarizers (requires additional deps/models):
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase4.run_batch \
+  --phase2-output-dir data/phase2_output \
+  --phase4-output-dir data/phase4_output \
+  --summary-backend led
+```
+
+#### Phase 4 output structure
+- `data/phase4_output/<source>/<strategy>/<document_id>.json`
+  - Summary text, cosine similarity score, threshold flag, backend metadata.
+- `data/phase4_output/report.json`
+  - Status report for each source+strategy+document audit.
+
 ## Git tracking rules
 Generated processing outputs and PDFs are ignored by git:
 - `data/phase1_output/`
+- `data/phase2_output/`
+- `data/phase3_output/`
+- `data/phase4_output/`
 - `*.pdf`

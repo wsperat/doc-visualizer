@@ -17,6 +17,8 @@ local_execution
 *.pdf
 data/phase1_output/
 data/phase2_output/
+data/phase3_output/
+data/phase4_output/
 
 # Distribution / packaging
 *.ipynb
