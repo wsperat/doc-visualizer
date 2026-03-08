@@ -95,3 +95,10 @@ class Phase5PlotRequest(BaseModel):
     phase5_output_dir: str = "data/phase5_output"
     metadata_dir: str = "data/phase1_output/metadata"
     output_html: str = "data/phase5_output/document_map.html"
+
+
+class UploadResponse(BaseModel):
+    """Response payload for file uploads."""
+
+    saved_files: list[str]
+    target_dir: str

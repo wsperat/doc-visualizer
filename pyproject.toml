@@ -13,15 +13,17 @@ dependencies = [
   "fastapi>=0.118.0",
   "grobid-client-python>=0.0.8",
   "hdbscan>=0.8.39",
+  "httpx>=0.28.1",
   "plotly>=6.0.1",
+  "python-multipart>=0.0.20",
   "scikit-learn>=1.5.2",
+  "streamlit>=1.41.1",
   "umap-learn>=0.5.9.post2",
   "uvicorn>=0.34.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.28.1",
   "isort>=5.13.2",
   "mypy>=1.11.2",
   "pytest>=8.3.3",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 from doc_visualizer.api.models import (
@@ -51,10 +52,11 @@ async def execute_phase5_plot(request: Phase5PlotRequest) -> dict[str, object]:
 
 
 def _run_phase1_sync(request: Phase1RunRequest) -> dict[str, object]:
+    resolved_config_path = request.config_path or os.getenv("GROBID_CONFIG_PATH")
     results = run_phase1_batch(
         input_dir=Path(request.input_dir).resolve(),
         output_dir=Path(request.output_dir).resolve(),
-        config_path=request.config_path,
+        config_path=resolved_config_path,
     )
     succeeded = sum(1 for result in results if result.status == "ok")
     failed = len(results) - succeeded

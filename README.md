@@ -14,12 +14,38 @@ Core endpoints:
 - `GET /health`
 - `GET /jobs`
 - `GET /jobs/{job_id}`
+- `POST /files/upload`
 - `POST /phases/1/run`
 - `POST /phases/2/run`
 - `POST /phases/3/run`
 - `POST /phases/4/run`
 - `POST /phases/5/run`
 - `POST /phases/5/plot`
+- `GET /phase5/plot-html`
+- `GET /phase5/map-records`
+
+## Frontend Service
+A separate Streamlit frontend service is available. It:
+1. Uploads PDF files to the backend.
+2. Runs phases 1-5 asynchronously through FastAPI endpoints.
+3. Shows live per-phase job status messages.
+4. Renders the final interactive Phase 5 Plotly HTML map in-app.
+
+Run frontend service:
+```bash
+UV_CACHE_DIR=.uv-cache uv run streamlit run app/doc_visualizer/frontend/app.py
+```
+
+## Docker Compose
+Run GROBID + backend API + frontend together:
+```bash
+docker compose up --build
+```
+
+Service URLs:
+- GROBID: `http://localhost:8071` (default compose host port)
+- Backend API: `http://localhost:8000`
+- Frontend: `http://localhost:8501`
 
 ## Implemented Phases
 

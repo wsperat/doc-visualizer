@@ -18,6 +18,71 @@ def test_health_endpoint_returns_ok() -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_upload_files_endpoint_saves_pdfs(tmp_path: Path) -> None:
+    client = TestClient(app)
+    target_dir = tmp_path / "uploads"
+
+    response = client.post(
+        "/files/upload",
+        data={"target_dir": str(target_dir)},
+        files=[("files", ("paper.pdf", b"%PDF-1.4\n...", "application/pdf"))],
+    )
+
+    assert response.status_code == 200
+    payload = cast(dict[str, object], response.json())
+    saved_files = cast(list[str], payload["saved_files"])
+    assert len(saved_files) == 1
+    assert (target_dir / "paper.pdf").exists()
+
+
+def test_phase5_plot_html_endpoint_returns_html(tmp_path: Path) -> None:
+    client = TestClient(app)
+    html_path = tmp_path / "plot.html"
+    html_path.write_text("<html><body>plot</body></html>", encoding="utf-8")
+
+    response = client.get("/phase5/plot-html", params={"output_html": str(html_path)})
+
+    assert response.status_code == 200
+    assert "plot" in response.text
+
+
+def test_phase5_map_records_endpoint_returns_title_enriched_points(tmp_path: Path) -> None:
+    client = TestClient(app)
+
+    phase5_output = tmp_path / "phase5_output"
+    (phase5_output / "grobid" / "whole_doc_mean_pool").mkdir(parents=True)
+    (phase5_output / "grobid" / "whole_doc_mean_pool" / "map.json").write_text(
+        json.dumps(
+            {
+                "points": [
+                    {"document_id": "paper", "cluster_id": 0, "x": 1.0, "y": 2.0},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    metadata_dir = tmp_path / "metadata"
+    metadata_dir.mkdir(parents=True)
+    (metadata_dir / "paper.json").write_text(
+        json.dumps({"title": "Paper Title"}),
+        encoding="utf-8",
+    )
+
+    response = client.get(
+        "/phase5/map-records",
+        params={
+            "phase5_output_dir": str(phase5_output),
+            "metadata_dir": str(metadata_dir),
+        },
+    )
+
+    assert response.status_code == 200
+    payload = cast(dict[str, object], response.json())
+    assert payload["count"] == 1
+    records = cast(list[dict[str, object]], payload["records"])
+    assert records[0]["title"] == "Paper Title"
+
+
 def test_phase2_job_runs_asynchronously_and_writes_outputs(tmp_path: Path) -> None:
     client = TestClient(app)
 

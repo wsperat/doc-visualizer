@@ -1,0 +1,58 @@
+---
+services:
+  grobid:
+    platform: ${GROBID_PLATFORM:-linux/amd64}
+    build:
+      context: .
+      dockerfile: docker/grobid/Dockerfile
+    ports:
+      - "${GROBID_HOST_PORT:-8071}:8070"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    command: >
+      uv run uvicorn doc_visualizer.api.main:app
+      --host 0.0.0.0
+      --port 8000
+    environment:
+      GROBID_CONFIG_PATH: /app/docker/grobid/client-config.json
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "${BACKEND_HOST_PORT:-8000}:8000"
+    depends_on:
+      grobid:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    command: >
+      uv run streamlit run app/doc_visualizer/frontend/app.py
+      --server.address 0.0.0.0
+      --server.port 8501
+    environment:
+      DOC_VIS_API_BASE_URL: http://backend:8000
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "${FRONTEND_HOST_PORT:-8501}:8501"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
