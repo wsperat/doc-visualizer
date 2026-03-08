@@ -14,6 +14,7 @@ __pycache__/
 local_execution
 .ruff_cache
 .ignore/
+*.pdf
 data/phase1_output/
 
 # Distribution / packaging
