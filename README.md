@@ -229,10 +229,39 @@ UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase4.run_batch \
 - `data/phase4_output/report.json`
   - Status report for each source+strategy+document audit.
 
+### Phase 5: Dimensionality Reduction and Mapping
+Phase 5 converts strategy-level document vectors into 2D map coordinates and clusters.
+
+#### What it does
+1. Loads Phase 2 strategy payloads per source (`grobid`, `raw`, etc.).
+2. Reconstructs one document vector (`V_doc`) for each document using the same strategy logic as Phase 4.
+3. Projects vectors into 2D using UMAP (`n_neighbors`, `min_dist` configurable).
+4. Clusters projected points with HDBSCAN (no pre-defined `k` required).
+5. Optionally overlays Phase 4 QC flags (`similarity_score`, `is_below_threshold`) onto each point.
+
+#### Run Phase 5
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m doc_visualizer.phase5.run_batch \
+  --phase2-output-dir data/phase2_output \
+  --phase4-output-dir data/phase4_output \
+  --phase5-output-dir data/phase5_output \
+  --embedding-backend hashing \
+  --n-neighbors 15 \
+  --min-dist 0.1 \
+  --min-cluster-size 5
+```
+
+#### Phase 5 output structure
+- `data/phase5_output/<source>/<strategy>/map.json`
+  - 2D points (`x`, `y`), cluster labels, and optional QC overlay fields.
+- `data/phase5_output/report.json`
+  - Status report for each source+strategy map generation run.
+
 ## Git tracking rules
 Generated processing outputs and PDFs are ignored by git:
 - `data/phase1_output/`
 - `data/phase2_output/`
 - `data/phase3_output/`
 - `data/phase4_output/`
+- `data/phase5_output/`
 - `*.pdf`
