@@ -1,7 +1,7 @@
 # Doc Visualizer
 ## Phase 1: Structural Parsing & Metadata Isolation
 
-Scientific PDFs are not "blocks of text"; they are hierarchies. We must treat them as such.
+Scientific PDFs are not "blocks of text"; they are hierarchies. They should be treated as such.
 
 * **Primary Tool:** **GROBID** (via `grobid-client-python`). It is the industry standard for parsing scientific PDFs into structured XML/TEI.
 * **The Extraction Logic:** * **Content:** Extract `Abstract`, `Introduction`, `Methods`, `Results`, and `Conclusion` into a dictionary.
@@ -14,7 +14,7 @@ Scientific PDFs are not "blocks of text"; they are hierarchies. We must treat th
 
 ## Phase 2: User-Selectable Context Strategies
 
-Your system will allow users to choose how the model "perceives" the document structure.
+The system will allow users to choose how the model "perceives" the document structure.
 
 | Strategy | Implementation Logic | Best For... |
 | --- | --- | --- |
