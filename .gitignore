@@ -16,6 +16,7 @@ local_execution
 .ignore/
 *.pdf
 data/phase1_output/
+data/phase2_output/
 
 # Distribution / packaging
 *.ipynb
